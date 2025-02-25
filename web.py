@@ -1,10 +1,12 @@
 import os
 import boto3
+import json
 
 from fastapi import FastAPI
 
 app = FastAPI()
 
+## Client
 # AWS S3 Client 생성
 s3_client = boto3.client(
     's3',
@@ -21,7 +23,16 @@ kms_client = boto3.client(
     region_name=os.getenv('AWS_REGION')
 )
 
+# AWS Bedrock Client 생성
+bedrock_AWS_REGION = 'us-east-1'
+bedrock_client = boto3.client(
+    'bedrock-runtime',
+    aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
+    aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
+    region_name=bedrock_AWS_REGION
+)
 
+## Logic
 ## Abount S3
 @app.get("/s3/buckets")
 def list_s3_buckets():
@@ -54,9 +65,59 @@ def list_kms_keys():
 
     return {"keys": cmk_keys}
 
+## About Inference with bedrock
+# ModelId = "anthropic.claude-3-7-sonnet-20250219-v1:0"
+ModelId = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
+# ModelId = "anthropic.claude-3-5-sonnet-20241022-v2:0"
+# ModelId = "anthropic.claude-3-5-sonnet-20240620-v1:0"
 
+@app.post("/bedrock/invoke")
+def invoke_bedrock_model(query: str):
+    try:
+        # Add your logic here
+        promptBody = {
+            "anthropic_version": "bedrock-2023-05-31",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "You are an elementary school math teacher. You should explain the formula as simple as possible."
+                        }
+                    ]
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": query
+                        }
+                    ]
+                }
+            ],
+            "max_tokens": 512,
+            "temperature": 0.5
+        }
 
+        # body_bytes = json.dumps(promptBody).encode('utf-8')
+        body_bytes = json.dumps(promptBody)
 
+        response = bedrock_client.invoke_model(
+            modelId=ModelId,
+            body=body_bytes,
+            contentType='application/json'
+        )
+        return {
+            'statusCode': 200,
+            'body': json.loads(response["body"].read())["content"][0]["text"]
+        }
+    except Exception as e:
+        return {
+            'statusCode': 500,
+            'body': str(e)
+        }
 
 #async def root():
 @app.get("/")

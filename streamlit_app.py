@@ -15,19 +15,52 @@ def fetch_kms_keys():
             return ["Error fetching keys"]  # 오류 발생 시 기본값 반환
     except requests.exceptions.RequestException:
         return ["Connection error"]  # FastAPI 연결 오류 처리
-
 # KMS 키 목록 동적 설정
 KMS_KEYS = fetch_kms_keys()
 KMS_KEYS = [f"{key['Alias'].replace('alias/','')} ({key['KeyId']})" for key in KMS_KEYS]  # 출력 형식 변경
 
 
+
+
 st.set_page_config(page_title="Bespinglobal", layout="wide")
 
-# KMS 탭 생성
-tab1, tab2 = st.tabs(["🔐 KMS", "🤖 GenAI"])
+# 탭 생성
+tab1, tab2 = st.tabs(["🤖 GenAI", "🔐 KMS"])
+
 
 with tab1:
-    # **최상단에 KMS Key 선택 Selectbox 추가**
+    # st.header("Amazon Bedrock 모델 호출")
+    
+    # 프롬프트 입력
+    query = st.text_area("🔤 Enter Prompt", height=100)
+    
+    # 요청 실행 버튼
+    if st.button("실행"):
+        if not query:
+            st.error("프롬프트를 입력해주세요.")
+        else:
+            # 로딩 표시
+            with st.spinner("모델 응답을 기다리는 중..."):
+                try:
+                    # FastAPI 서버로 요청 전송
+                    response = requests.post(f"{FASTAPI_URL}/bedrock/invoke", params={"query": query})
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        
+                        # 결과 표시 영역
+                        st.subheader("모델 응답")
+                        st.markdown(result.get("body", "응답이 없습니다."))
+                        
+                        # 상태 코드 표시
+                        st.text(f"상태 코드: {result.get('statusCode', '없음')}")
+                    else:
+                        st.error(f"오류 발생: {response.status_code} - {response.text}")
+                
+                except requests.exceptions.RequestException as e:
+                    st.error(f"서버 연결 오류: {e}")
+with tab2:
+    # **최상단에 KMS Key 선택 Selectbox 추가**n
     selected_key = st.selectbox("🔑 Select KMS Key", KMS_KEYS)
 
     # 중앙 입력 박스
